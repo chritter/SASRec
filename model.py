@@ -1,3 +1,5 @@
+
+# codes from other works, kyubyong park
 from modules import *
 
 
@@ -27,6 +29,7 @@ class Model():
 
         #
         with tf.variable_scope("SASRec", reuse=reuse):
+
             # sequence embedding, item embedding table
             self.seq, item_emb_table = embedding(self.input_seq,
                                                  vocab_size=itemnum + 1,
@@ -35,11 +38,12 @@ class Model():
                                                  scale=True,
                                                  l2_reg=args.l2_emb,
                                                  scope="input_embeddings",
-                                                 with_t=True,
+                                                 with_t=True, # returns outputs,lookup_table
                                                  reuse=reuse
                                                  )
 
             # Positional Encoding
+            #
             t, pos_emb_table = embedding(
                 tf.tile(tf.expand_dims(tf.range(tf.shape(self.input_seq)[1]), 0), [tf.shape(self.input_seq)[0], 1]),
                 vocab_size=args.maxlen,
@@ -51,6 +55,8 @@ class Model():
                 reuse=reuse,
                 with_t=True
             )
+
+            # add positional encoding element to sequence
             self.seq += t
 
             # Dropout
@@ -59,9 +65,10 @@ class Model():
                                          training=tf.convert_to_tensor(self.is_training))
             self.seq *= mask
 
-            # Build blocks
-
+            # Build self-attention blocks
             for i in range(args.num_blocks):
+
+                # block i
                 with tf.variable_scope("num_blocks_%d" % i):
 
                     # Self-attention
@@ -74,39 +81,54 @@ class Model():
                                                    causality=True,
                                                    scope="self_attention")
 
-                    # Feed forward
+                    # Feed forward network
                     self.seq = feedforward(normalize(self.seq), num_units=[args.hidden_units, args.hidden_units],
                                            dropout_rate=args.dropout_rate, is_training=self.is_training)
                     self.seq *= mask
 
             self.seq = normalize(self.seq)
 
+        # reshape positive and negative samples into right shape
         pos = tf.reshape(pos, [tf.shape(self.input_seq)[0] * args.maxlen])
         neg = tf.reshape(neg, [tf.shape(self.input_seq)[0] * args.maxlen])
+
+        # lookup pos and neg items in embeddings
         pos_emb = tf.nn.embedding_lookup(item_emb_table, pos)
         neg_emb = tf.nn.embedding_lookup(item_emb_table, neg)
+
+        # reshape SASRec output
         seq_emb = tf.reshape(self.seq, [tf.shape(self.input_seq)[0] * args.maxlen, args.hidden_units])
 
+        # get
         self.test_item = tf.placeholder(tf.int32, shape=(101))
         test_item_emb = tf.nn.embedding_lookup(item_emb_table, self.test_item)
+
+
         self.test_logits = tf.matmul(seq_emb, tf.transpose(test_item_emb))
         self.test_logits = tf.reshape(self.test_logits, [tf.shape(self.input_seq)[0], args.maxlen, 101])
         self.test_logits = self.test_logits[:, -1, :]
 
-        # prediction layer
+        # prediction layer: relevance of item i, given first items up to t,  r_i_t (paper)
         self.pos_logits = tf.reduce_sum(pos_emb * seq_emb, -1)
         self.neg_logits = tf.reduce_sum(neg_emb * seq_emb, -1)
 
-        # ignore padding items (0)
+        # ignore padding items (0): if istarget is zero then not considered in loss function below
         istarget = tf.reshape(tf.to_float(tf.not_equal(pos, 0)), [tf.shape(self.input_seq)[0] * args.maxlen])
+
+        # binary cross entropy loss
         self.loss = tf.reduce_sum(
             - tf.log(tf.sigmoid(self.pos_logits) + 1e-24) * istarget -
             tf.log(1 - tf.sigmoid(self.neg_logits) + 1e-24) * istarget
         ) / tf.reduce_sum(istarget)
+
+        # add regularization loss
         reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         self.loss += sum(reg_losses)
 
+        # save loss in summary stats
         tf.summary.scalar('loss', self.loss)
+
+        # calculate AUC, not in paper
         self.auc = tf.reduce_sum(
             ((tf.sign(self.pos_logits - self.neg_logits) + 1) / 2) * istarget
         ) / tf.reduce_sum(istarget)

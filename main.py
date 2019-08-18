@@ -17,15 +17,18 @@ def str2bool(s):
 # ==================================================
 # ----------------------- Setup
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', required=True)
-parser.add_argument('--train_dir', required=True)
+parser.add_argument('--dataset',default='Video',type=str)  #required=True)
+parser.add_argument('--train_dir',default='training1',type=str)# required=True)
+
 # ----------------------- Hyperparameter
 parser.add_argument('--batch_size', default=128, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--maxlen', default=50, type=int)
 parser.add_argument('--hidden_units', default=50, type=int)
+# number of self-attention blocks
 parser.add_argument('--num_blocks', default=2, type=int)
 parser.add_argument('--num_epochs', default=201, type=int)
+# number of heads in multi-head attention model
 parser.add_argument('--num_heads', default=1, type=int)
 parser.add_argument('--dropout_rate', default=0.5, type=float)
 parser.add_argument('--l2_emb', default=0.0, type=float)
@@ -43,9 +46,13 @@ f.close()
 # creates train, valid, test set, total number of users, items
 dataset = data_partition(args.dataset)
 [user_train, user_valid, user_test, usernum, itemnum] = dataset
+print('number of users in train data: ',len(user_train))
+print('number of users in valid data: ',len(user_valid))
+
 
 # calculates number of batches
-num_batch = len(user_train) / args.batch_size
+num_batch = int(len(user_train) / args.batch_size)
+print('Number of batches per epoch: ',num_batch)
 
 # calculates average length of actions
 cc = 0.0
