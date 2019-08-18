@@ -1,4 +1,4 @@
-# SASRec: Self-Attentive Sequential Recommendation
+ratin# SASRec: Self-Attentive Sequential Recommendation
 
 This is our TensorFlow implementation for the paper:
 

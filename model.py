@@ -3,15 +3,29 @@ from modules import *
 
 class Model():
     def __init__(self, usernum, itemnum, args, reuse=None):
+        '''
+
+        :param usernum:
+        :param itemnum:
+        :param args:
+        :param reuse:
+        '''
+
+        # define model input parameter placeholder
         self.is_training = tf.placeholder(tf.bool, shape=())
         self.u = tf.placeholder(tf.int32, shape=(None))
         self.input_seq = tf.placeholder(tf.int32, shape=(None, args.maxlen))
         self.pos = tf.placeholder(tf.int32, shape=(None, args.maxlen))
         self.neg = tf.placeholder(tf.int32, shape=(None, args.maxlen))
+
+
         pos = self.pos
         neg = self.neg
+
+        # create mask for padded values
         mask = tf.expand_dims(tf.to_float(tf.not_equal(self.input_seq, 0)), -1)
 
+        #
         with tf.variable_scope("SASRec", reuse=reuse):
             # sequence embedding, item embedding table
             self.seq, item_emb_table = embedding(self.input_seq,
